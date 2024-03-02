@@ -1,45 +1,41 @@
+// app.js
+
+const express = require('express');
 const bodyParser = require('body-parser');
-const express = require('express')
+const cors = require('cors');
+const morgan = require('morgan');
+const rotaUsuarios = require('./routes/rotasUsuario');
+
+
 const app = express();
-app.use(express.json());
-const cors = require("cors");
+
+// Middlewares
+app.use(bodyParser.json());
 app.use(cors());
-const morgan = require("morgan");
-app.use(morgan("dev"));
-app.use(bodyParser.urlencoded({extended:false}))
+app.use(morgan('dev'));
 
-const rotaUsuarios = require("./routes/rotasUsuario");
+// Rotas
+app.use('/usuario', rotaUsuarios);
 
-app.use((req,res,next)=>{
-    res.header("Access-Control-Allow-Origin","*")
+// Middleware para lidar com rotas inexistentes
+app.use((req, res, next) => {
+    const erro = new Error('Não encontrado');
+    erro.status = 404;
+    next(erro);
+});
 
-    res.header(
-        "Access-Control-Allow-Headers",
-        "Origin, X-Requested-With, Content-Type, Accept,Autorizaton"
-        
-    )
-    if(req.method === "OPTIONS"){
-        res.header("Access-Control-Allow-Methods", "PUT, POST, PATCH, DELETE, GET")
-        return res.status(200).send({})
-    }
-    next();
-})
-
-
-app.use("/usuario", rotaUsuarios);
-
-app.use((req, res, next)=>{
-    const erro = new Error("nao encontrado")
-    erro.status(404);
-})
-
-app.use((error,req,res,next)=>{
+// Middleware para lidar com erros
+app.use((error, req, res, next) => {
     res.status(error.status || 500);
     return res.json({
-        erro:{
-            mensagem:error.message
+        erro: {
+            mensagem: error.message
         }
-    })
-})
+    });
+});
 
-module.exports = app
+
+// Configuração do servidor
+
+
+module.exports = app;

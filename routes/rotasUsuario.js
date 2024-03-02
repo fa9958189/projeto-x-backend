@@ -2,131 +2,125 @@ const express = require("express");
 const router = express.Router();
 const sqlite3 = require("sqlite3").verbose();
 const db = new sqlite3.Database("database.db");
-const usuario = [
-    {
-    id:1,
-    nome: "Bleno",
-    email:"bleno@gmail.com",
-    senha:"123",
-    },
-    {
-        id:2,
-        nome: "Felipe",
-        email:"felipe@gmail.com",
-        senha:"123",       
-    },
-    {
-        id:3,
-        nome: "Nero",
-        email:"nero@gmail.com",
-        senha:"123",   
-    },
-    {
-        id:4,
-        nome: "carlos",
-        email:"carlos@gmail.com",
-        senha:"123",   
-    }
-]
-router.get("/:id",(req,res,next)=>{
-    const {id} = req.params;
 
-db.all("SELECT * FROM usuario WHERE id=?",[id],(error,rows)=>{
-    if(error){
-        return res.status(500).send({
-            error:error.message
-        })
-    }
-    
-    res.status(200).send({
-        mensagem:"Aqui esta a lista de Usuarios",
-        usuario:rows
-    })
-})
-   
-})
-router.get("/",(req,res,next)=>{
+// Mensagens de sucesso e erro
+const SUCCESS_MESSAGE = "Operação realizada com sucesso";
+const ERROR_MESSAGE = "Erro ao executar operação";
 
-db.all("SELECT * FROM usuario",(error,rows)=>{
-    if(error){
-        return res.status(500).send({
-            error:error.message
-        })
-    }
-    res.status(200).send({
-        mensagem:"Aqui esta a lista de Usuarios",
-        usuarios:rows
-    })
-})
-   
-})
-router.get("/nomes",(req,res,next)=>{
-    let nomes=[];
-    usuario.map((linha)=>{
-        nomes.push({
-            nome:linha.nome,
-            email:linha.email
-        })
-    })
+// Rota para fazer login
+router.post("/logon", (req, res, next) => {
+    const { email, senha } = req.body;
 
-    res.json(nomes)
-})
-router.post("/",(req,res,next)=>{
-
-   const{nome,email,senha} = req.body;
-
-   db.serialize(()=>{
-    db.run("CREATE TABLE IF NOT EXISTS usuario(id INTERGER PRIMARY KEY AUTOINCREMENT,nome TEXT, email TEXT UNIQUE, senha TEXT)")
-    const insertUsuario = db.prepare("INSERT INTO usuario(nome,email,senha) VALUES(?,?,?)")
-    insertUsuario.run(nome,email,senha);
-    insertUsuario.finalize();
-   })
-
-   process.on("SIGINT",()=>{
-    db.close((err)=>{
-        if(err){
-            return res.status(304).send(err.message)
+    db.get("SELECT * FROM usuario WHERE email = ? AND senha = ?", [email, senha], (error, row) => {
+        if (error) {
+            return res.status(500).send({ error: error.message });
         }
-    })
-   })
- 
-
-
-    res.status(200).send({mensagem:"salvo com Sucesso"});
-
+        
+        if (row) {
+            res.status(200).send({ mensagem: "Login bem-sucedido" });
+        } else {
+            res.status(401).send({ error: "Credenciais inválidas" });
+        }
+    });
 });
-router.put("/",(req,res,next)=>{
-    const {id,nome,email,senha} = req.body;
-    db.run("UPDATE usuario SET nome=?,email=?,senha=? WHERE id=?",
-    [nome,email,senha,id],function(error){
-        if(error){
+
+// Rota para obter um usuário pelo ID
+router.get("/:id", (req, res, next) => {
+    const { id } = req.params;
+
+    db.all("SELECT * FROM usuario WHERE id=?", [id], (error, rows) => {
+        if (error) {
             return res.status(500).send({
-                error:error.message
-            })
+                error: error.message
+            });
         }
+
         res.status(200).send({
-            mensagem:"Cadastro alterado com Sucesso!",
-         
-        })
-    })
-      
-  
-  });
-  router.delete("/:id",(req,res,next)=>{
-    const {id} = req.params;
-    db.run("DELETE FROM usuario WHERE id= ?",id,(error)=>{
-       
-        if(error){
+            mensagem: "Aqui está o usuário solicitado",
+            usuario: rows
+        });
+    });
+});
+
+// Rota para listar todos os usuários
+router.get("/", (req, res, next) => {
+    db.all("SELECT * FROM usuario", (error, rows) => {
+        if (error) {
             return res.status(500).send({
-                error:error.message
+                error: error.message
             });
         }
         res.status(200).send({
-            mensagem:"Cadastro deletado com sucesso!"
-        })
-
+            mensagem: "Aqui estão todos os usuários",
+            usuarios: rows
+        });
     });
+});
 
-  
-  });
+// Rota para listar apenas nomes e emails dos usuários
+router.get("/nomes", (req, res, next) => {
+    db.all("SELECT nome, email FROM usuario", (error, rows) => {
+        if (error) {
+            return res.status(500).send({
+                error: error.message
+            });
+        }
+        res.status(200).send(rows);
+    });
+});
+
+// Rota para criar um novo usuário
+router.post("/", (req, res, next) => {
+    const { nome, email, senha } = req.body;
+
+    if (!nome || !email || !senha) {
+        return res.status(400).send({ error: "Parâmetros inválidos" });
+    }
+
+    db.run("INSERT INTO usuario(nome, email, senha) VALUES (?, ?, ?)", [nome, email, senha], (error) => {
+        if (error) {
+            return res.status(500).send({
+                error: error.message
+            });
+        }
+        res.status(200).send({ mensagem: SUCCESS_MESSAGE });
+    });
+});
+
+// Rota para atualizar um usuário existente
+router.put("/", (req, res, next) => {
+    const { id, nome, email, senha } = req.body;
+
+    if (!id || !nome || !email || !senha) {
+        return res.status(400).send({ error: "Parâmetros inválidos" });
+    }
+
+    db.run("UPDATE usuario SET nome=?, email=?, senha=? WHERE id=?", [nome, email, senha, id], (error) => {
+        if (error) {
+            return res.status(500).send({
+                error: error.message
+            });
+        }
+        res.status(200).send({ mensagem: SUCCESS_MESSAGE });
+    });
+});
+
+// Rota para excluir um usuário pelo ID
+router.delete("/:id", (req, res, next) => {
+    const { id } = req.params;
+
+    if (!id) {
+        return res.status(400).send({ error: "Parâmetros inválidos" });
+    }
+
+    db.run("DELETE FROM usuario WHERE id=?", id, (error) => {
+        if (error) {
+            return res.status(500).send({
+                error: error.message
+            });
+        }
+        res.status(200).send({ mensagem: SUCCESS_MESSAGE });
+    });
+});
+
 module.exports = router;
