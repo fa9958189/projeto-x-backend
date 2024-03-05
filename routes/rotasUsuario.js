@@ -8,14 +8,14 @@ const SUCCESS_MESSAGE = "Operação realizada com sucesso";
 const ERROR_MESSAGE = "Erro ao executar operação";
 
 // Rota para fazer login
-router.post("/logon", (req, res, next) => {
+router.post("/logon", (req, res, next) => { // Rota corrigida para /logon
     const { email, senha } = req.body;
 
     db.get("SELECT * FROM usuario WHERE email = ? AND senha = ?", [email, senha], (error, row) => {
         if (error) {
             return res.status(500).send({ error: error.message });
         }
-        
+
         if (row) {
             res.status(200).send({ mensagem: "Login bem-sucedido" });
         } else {
@@ -24,11 +24,14 @@ router.post("/logon", (req, res, next) => {
     });
 });
 
+// Restante do seu código de roteamento...
+
+
 // Rota para obter um usuário pelo ID
 router.get("/:id", (req, res, next) => {
     const { id } = req.params;
 
-    db.all("SELECT * FROM usuario WHERE id=?", [id], (error, rows) => {
+    db.get("SELECT * FROM usuario WHERE id=?", [id], (error, rows) => {
         if (error) {
             return res.status(500).send({
                 error: error.message
@@ -39,6 +42,26 @@ router.get("/:id", (req, res, next) => {
             mensagem: "Aqui está o usuário solicitado",
             usuario: rows
         });
+    });
+});
+
+
+router.post("/login", (req, res, next) => {
+    const {email,senha} =req.body;
+
+    db.all("SELECT id, nome, email FROM usuario WHERE email=? and senha=? ",[email,senha], [id], (error, rows) => {
+        if (error) {
+            return res.status(500).send({
+                error: error.message
+            });
+        }
+
+        if(rows.length>0){
+            res.status(200).send({
+                mensagem: "Dados de login corretos!",
+                usuario: rows
+            });
+        }
     });
 });
 
