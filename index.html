@@ -9,13 +9,15 @@
 <body>
     <script>
         function listar(){
-            fetch("localhost:5000")
+            fetch("http://localhost:5000") // Adicione o protocolo HTTP aqui
             .then(function(response){
                 console.log(response);
             })
+            .catch(function(error) {
+                console.error('Erro ao listar:', error);
+            });
         }
         listar();
     </script>
-
 </body>
 </html>
