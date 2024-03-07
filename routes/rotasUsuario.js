@@ -104,31 +104,77 @@ router.get("/nomes", (req, res, next) => {
 });
 
 // Rota para criar um novo usuário
-router.post("/", (req, res, next) => {
+router.post('/', (req, res, next) => {
     const { nome, email, senha } = req.body;
 
-    if (!nome || !email || !senha) {
-        return res.status(400).send({ error: "Parâmetros inválidos" });
+    // Validação dos campos
+    let msg = [];
+    if (!nome || nome.length < 3) {
+        msg.push({ mensagem: "Nome inválido! Deve ter pelo menos 3 caracteres." });
+    }
+    if (!email || !validateEmail(email)) {
+        msg.push({ mensagem: "E-mail inválido!" });
+    }
+    if (!senha || senha.length < 6) {
+        msg.push({ mensagem: "Senha inválida! Deve ter pelo menos 6 caracteres." });
+    }
+    if (msg.length > 0) {
+        return res.status(400).send({
+            mensagem: "Falha ao cadastrar usuário.",
+            erros: msg
+        });
     }
 
-    // Criptografar a senha antes de armazená-la no banco de dados
-    bcrypt.hash(senha, 10, (err, hash) => {
-        if (err) {
+    // Verifica se o email já está cadastrado
+    db.get(`SELECT * FROM usuario WHERE email = ?`, [email], (error, usuarioExistente) => {
+        if (error) {
             return res.status(500).send({
-                error: err.message
+                error: error.message,
+                response: null
             });
         }
-        // Salvar o usuário no banco de dados com a senha criptografada
-        db.run("INSERT INTO usuario(nome, email, senha) VALUES (?, ?, ?)", [nome, email, hash], (error) => {
-            if (error) {
+
+        if (usuarioExistente) {
+            return res.status(400).send({
+                mensagem: "E-mail já cadastrado."
+            });
+        }
+
+        // Hash da senha antes de salvar no banco de dados
+        bcrypt.hash(senha, 10, (hashError, hashedPassword) => {
+            if (hashError) {
                 return res.status(500).send({
-                    error: error.message
+                    error: hashError.message,
+                    response: null
                 });
             }
-            res.status(201).send({ mensagem: "Cadastro criado com sucesso!" });
+
+            // Insere o novo usuário no banco de dados
+            db.run(`INSERT INTO usuario (nome, email, senha) VALUES (?, ?, ?)`, [nome, email, hashedPassword], function (insertError) {
+                if (insertError) {
+                    return res.status(500).send({
+                        error: insertError.message,
+                        response: null
+                    });
+                }
+                res.status(201).send({
+                    mensagem: "Cadastro criado com sucesso!",
+                    usuario: {
+                        id: this.lastID,
+                        nome: nome,
+                        email: email
+                    }
+                });
+            });
         });
     });
 });
+
+// Função para validar formato de e-mail
+function validateEmail(email) {
+    const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return re.test(String(email).toLowerCase());
+}
 
 // Rota para atualizar um usuário existente
 router.put("/", (req, res, next) => {
