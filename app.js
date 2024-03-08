@@ -1,49 +1,52 @@
-const express = require('express')
+const express = require('express');
 const app = express();
-app.use(express.json());
 const cors = require("cors");
-app.use(cors());
 const morgan = require("morgan");
-app.use(morgan("dev"));
 const bodyParser = require('body-parser');
-app.use(bodyParser.urlencoded({extended:false}))
 
+// Middlewares
+app.use(express.json());
+app.use(cors());
+app.use(morgan("dev"));
+app.use(bodyParser.urlencoded({extended:false}));
 
-
+// Rotas
 const rotaUsuario = require("./routes/rotasUsuario");
+const rotaProduto = require("./routes/rotasProduto");
 
-
-app.use((req,res,next)=>{
-    res.header("Access-Control-Allow-Origin","*");
-
+// Configuração de headers para CORS
+app.use((req, res, next) => {
+    res.header("Access-Control-Allow-Origin", "*");
     res.header(
         "Access-Control-Allow-Headers",
-        "Origin, X-Requested-With, Content-Type, Accept,Autorization"
-
+        "Origin, X-Requested-With, Content-Type, Accept, Authorization"
     );
-    if(req.method === "OPTIONS"){
-        res.header("Access-Control-Allow-Methods","PUT, POST, PATCH, DELETE, GET");
+    if (req.method === "OPTIONS") {
+        res.header("Access-Control-Allow-Methods", "PUT, POST, PATCH, DELETE, GET");
         return res.status(200).send({});
     }
     next();
-})
+});
 
+// Rotas de Usuário e Produto
+app.use("/usuario", rotaUsuario);
+app.use("/produto", rotaProduto);
 
-app.use("/usuario",rotaUsuario);
+// Tratamento de erros para rotas não encontradas
+app.use((req, res, next) => {
+    const erro = new Error("Não encontrado!");
+    erro.status = 404;
+    next(erro);
+});
 
-
-app.use((req, res, next)=>{
-      const erro = new Error("Não encontrado!");
-      erro.status(404);
-})
-
-app.use((error,req,res,next)=>{
+// Tratamento de erros globais
+app.use((error, req, res, next) => {
     res.status(error.status || 500);
     return res.json({
-        erro:{
-            mensagem:error.message
+        erro: {
+            mensagem: error.message
         }
-    })
-})
+    });
+});
 
-module.exports = app
+module.exports = app;
