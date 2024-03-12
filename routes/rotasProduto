@@ -10,7 +10,7 @@ const db = new sqlite3.Database("database.db");
 // Rota para cadastrar um produto
 router.post("/", (req, res) => {
     const { status, descricao, estoque_minimo, estoque_maximo } = req.body;
-    //criar a tabela produto, caso ela ainda nao exista
+    //criar a tabela produto, caso ela ainda nao 
                 db.run("CREATE TABLE IF NOT EXISTS produto (id INTEGER PRIMARY KEY AUTOINCREMENT, status TEXT, descricao TEXT, estoque_minimo REAL, estoque_maximo REAL)", (createTableError) => {
                     console.log(createTableError)
                     if (createTableError) {
@@ -21,23 +21,17 @@ router.post("/", (req, res) => {
 
 
                 });
-
+           
     // Verifica se todos os campos obrigatórios estão presentes
     if (!status || !descricao || !estoque_minimo || !estoque_maximo) {
         return res.status(400).json({ mensagem: "Todos os campos são obrigatórios." });
     }
-
-    // Validação do formato do email (opcional)
-    if (!validateEmail(email)) {
-        return res.status(400).json({ mensagem: "Formato de email inválido." });
-    }
-
     // Insira os dados do produto no banco de dados
     db.run(
         "INSERT INTO produto (status, descricao, estoque_minimo, estoque_maximo) VALUES (?, ?, ?, ?)",
         [status, descricao, estoque_minimo, estoque_maximo],
         function (error) {
-       
+     
             if (error) {
                 console.error("Erro ao cadastrar produto:", error.message);
                 
@@ -48,10 +42,74 @@ router.post("/", (req, res) => {
     );
 });
 
-// Função para validar o formato de email
-function validateEmail(email) {
-    const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return re.test(String(email).toLowerCase());
-}
+
+// Rota para listar todos os usuários
+router.get("/", (req, res, next) => {
+    db.all("SELECT * FROM produto", (error, rows) => {
+        if (error) {
+            return res.status(500).send({
+                error: error.message
+            });
+        }
+        res.status(200).send({
+            mensagem: "Aqui estão todos os cadastros",
+            produtos: rows
+        });
+    });
+});
+
+// Rota para obter um usuário pelo ID
+router.get("/:id", (req, res, next) => {
+    const { id } = req.params;
+    db.get("SELECT * FROM produto WHERE id=?", [id], (error, rows) => {
+        if (error) {
+            return res.status(500).send({
+                error: error.message
+            });
+        }
+
+        res.status(200).send({
+            mensagem: "Aqui está o produto solicitado",
+            produtos: rows
+        });
+    });
+});
+
+
+// Rota para atualizar um usuário existente
+router.put("/", (req, res, next) => {
+    const { id, status, descricao, estoque_minimo, estoque_maximo, } = req.body;
+
+    if (!id || !status || !descricao || !estoque_minimo || !estoque_maximo) {
+        return res.status(400).send({ error: "Parâmetros inválidos" });
+    }
+
+    db.run("UPDATE produto SET id=?, status=?, descricao=?, estoque_minimo=?, estoque_maximo=?, WHERE id=?", [id, status, descricao, estoque_minimo, estoque_maximo, id], (error) => {
+        if (error) {
+            return res.status(500).send({
+                error: error.message
+            });
+        }
+        res.status(200).send({ mensagem: "Usuário atualizado com sucesso!" });
+    });
+});
+
+// Rota para excluir um usuário pelo ID
+router.delete("/:id", (req, res, next) => {
+    const { id } = req.params;
+
+    if (!id) {
+        return res.status(400).send({ error: "Parâmetros inválidos" });
+    }
+
+    db.run("DELETE FROM produto WHERE id=?", id, (error) => {
+        if (error) {
+            return res.status(500).send({
+                error: error.message
+            });
+        }
+        res.status(200).send({ mensagem: "Produto excluído com sucesso!" });
+    });
+});
 
 module.exports = router;
