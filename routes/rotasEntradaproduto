@@ -1,0 +1,74 @@
+// Importe as dependências necessárias
+const express = require("express");
+const router = express.Router();
+const sqlite3 = require("sqlite3").verbose();
+
+// Crie uma instância do banco de dados
+const db = new sqlite3.Database("database.db");
+
+// Rota para cadastrar uma entrada de produto
+router.post("/", (req, res) => {
+    const { id_produto, qtde, valor_unitario, data_entrada } = req.body;
+
+    // Criar a tabela de entrada de produto, caso ela ainda não exista
+    db.run("CREATE TABLE IF NOT EXISTS entrada_produto (id INTEGER PRIMARY KEY AUTOINCREMENT, id_produto INTEGER, qtde INTEGER, valor_unitario REAL, data_entrada TEXT)", (createTableError) => {
+        if (createTableError) {
+            return res.status(500).send({
+                error: createTableError.message
+            });
+        }
+
+        // Verifica se todos os campos obrigatórios estão presentes
+        if (!id_produto || !qtde || !valor_unitario || !data_entrada) {
+            return res.status(400).json({ mensagem: "Todos os campos são obrigatórios." });
+        }
+
+        // Insira os dados da entrada de produto no banco de dados
+        db.run(
+            "INSERT INTO entrada_produto (id_produto, qtde, valor_unitario, data_entrada) VALUES (?, ?, ?, ?)",
+            [id_produto, qtde, valor_unitario, data_entrada],
+            function (error) {
+                if (error) {
+                    console.error("Erro ao cadastrar entrada de produto:", error.message);
+                    return res.status(500).json({ mensagem: "Erro ao cadastrar entrada de produto. " + error.message });
+                }
+                res.status(201).json({ mensagem: "Entrada de produto cadastrada com sucesso!" });
+            }
+        );
+    });
+});
+
+// Rota para listar todas as entradas de produto
+router.get("/", (req, res, next) => {
+    db.all("SELECT * FROM entrada_produto", (error, rows) => {
+        if (error) {
+            return res.status(500).send({
+                error: error.message
+            });
+        }
+        res.status(200).send({
+            mensagem: "Aqui estão todas as entradas de produto cadastradas",
+            entradas: rows
+        });
+    });
+});
+
+// Rota para excluir uma entrada de produto pelo ID
+router.delete("/:id", (req, res, next) => {
+    const { id } = req.params;
+
+    if (!id) {
+        return res.status(400).send({ error: "Parâmetros inválidos" });
+    }
+
+    db.run("DELETE FROM entrada_produto WHERE id=?", id, (error) => {
+        if (error) {
+            return res.status(500).send({
+                error: error.message
+            });
+        }
+        res.status(200).send({ mensagem: "Entrada de produto excluída com sucesso!" });
+    });
+});
+
+module.exports = router;
