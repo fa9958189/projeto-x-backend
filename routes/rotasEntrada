@@ -8,10 +8,10 @@ const db = new sqlite3.Database("database.db");
 
 // Rota para cadastrar uma entrada de produto
 router.post("/", (req, res) => {
-    const { id_produto, qtde, valor_unitario, data_entrada } = req.body;
+    const { id_produto, nome_do_produto, qtde, valor_unitario, data_entrada } = req.body;
 
     // Criar a tabela de entrada de produto, caso ela ainda não exista
-    db.run("CREATE TABLE IF NOT EXISTS entrada_produto (id INTEGER PRIMARY KEY AUTOINCREMENT, id_produto INTEGER, qtde INTEGER, valor_unitario REAL, data_entrada TEXT)", (createTableError) => {
+    db.run("CREATE TABLE IF NOT EXISTS entrada_produto (id INTEGER PRIMARY KEY AUTOINCREMENT, id_produto INTEGER, nome_do_produto INTEGER, qtde INTEGER, valor_unitario REAL, data_entrada TEXT)", (createTableError) => {
         if (createTableError) {
             return res.status(500).send({
                 error: createTableError.message
@@ -19,14 +19,14 @@ router.post("/", (req, res) => {
         }
 
         // Verifica se todos os campos obrigatórios estão presentes
-        if (!id_produto || !qtde || !valor_unitario || !data_entrada) {
+        if (!id_produto || !nome_do_produto || !qtde || !valor_unitario || !data_entrada) {
             return res.status(400).json({ mensagem: "Todos os campos são obrigatórios." });
         }
 
         // Insira os dados da entrada de produto no banco de dados
         db.run(
-            "INSERT INTO entrada_produto (id_produto, qtde, valor_unitario, data_entrada) VALUES (?, ?, ?, ?)",
-            [id_produto, qtde, valor_unitario, data_entrada],
+            "INSERT INTO entrada_produto (id_produto, nome_do_produto, qtde, valor_unitario, data_entrada) VALUES (?, ?, ?, ?, ?)",
+            [id_produto, nome_do_produto, qtde, valor_unitario, data_entrada],
             function (error) {
                 if (error) {
                     console.error("Erro ao cadastrar entrada de produto:", error.message);
@@ -40,7 +40,7 @@ router.post("/", (req, res) => {
 
 // Rota para listar todas as entradas de produto
 router.get("/", (req, res, next) => {
-    db.all("SELECT * FROM entrada_produto", (error, rows) => {
+    db.all("SELECT * FROM entrada_produto INNER JOIN entrada ON entrada_produto = entrada_id", (error, rows) => {
         if (error) {
             return res.status(500).send({
                 error: error.message
