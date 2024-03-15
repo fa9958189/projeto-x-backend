@@ -1,0 +1,72 @@
+// Importe as dependências necessárias
+const express = require("express");
+const router = express.Router();
+const sqlite3 = require("sqlite3").verbose();
+
+// Crie uma instância do banco de dados
+const db = new sqlite3.Database("database.db");
+
+// Criar a tabela de saída de produto, caso ela ainda não exista
+db.run("CREATE TABLE IF NOT EXISTS saida_produto (id INTEGER PRIMARY KEY AUTOINCREMENT, id_produto INTEGER, qtde INTEGER, valor_unitario REAL, data_saida DATE)", (createTableError) => {
+    if (createTableError) {
+        console.error("Erro ao criar tabela de saída de produto:", createTableError.message);
+    }
+});
+
+// Rota para cadastrar uma saída de produto
+router.post("/", (req, res) => {
+    const { id_produto, qtde, valor_unitario, data_saida } = req.body;
+
+    // Verifica se todos os campos obrigatórios estão presentes
+    if (!id_produto || !qtde || !valor_unitario || !data_saida) {
+        return res.status(400).json({ mensagem: "Todos os campos são obrigatórios." });
+    }
+
+    // Insira os dados da saída de produto no banco de dados
+    db.run(
+        "INSERT INTO saida_produto (id_produto, qtde, valor_unitario, data_saida) VALUES (?, ?, ?, ?)",
+        [id_produto, qtde, valor_unitario, data_saida],
+        function (error) {
+            if (error) {
+                console.error("Erro ao cadastrar saída de produto:", error.message);
+                return res.status(500).json({ mensagem: "Erro ao cadastrar saída de produto. " + error.message });
+            }
+            res.status(201).json({ mensagem: "Saída de produto cadastrada com sucesso!" });
+        }
+    );
+});
+
+// Rota para listar todas as saídas de produto
+router.get("/", (req, res, next) => {
+    db.all("SELECT * FROM saida_produto INNER JOIN produto ON saida_produto.id_produto = produto.id", (error, rows) => {
+        if (error) {
+            return res.status(500).send({
+                error: error.message
+            });
+        }
+        res.status(200).send({
+            mensagem: "Aqui estão todas as saídas de produto cadastradas",
+            saidas: rows
+        });
+    });
+});
+
+// Rota para excluir uma saída de produto pelo ID
+router.delete("/:id", (req, res, next) => {
+    const { id } = req.params;
+
+    if (!id) {
+        return res.status(400).send({ error: "Parâmetros inválidos" });
+    }
+
+    db.run("DELETE FROM saida_produto WHERE id=?", id, (error) => {
+        if (error) {
+            return res.status(500).send({
+                error: error.message
+            });
+        }
+        res.status(200).send({ mensagem: "Saída de produto excluída com sucesso!" });
+    });
+});
+
+module.exports = router;
