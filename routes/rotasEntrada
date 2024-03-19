@@ -13,6 +13,7 @@ const db = new sqlite3.Database("database.db");
                 error: createTableError.message
             });
         }
+    });
 // Rota para cadastrar uma entrada de produto
 router.post("/", (req, res) => {
     const { id_produto, qtde, valor_unitario, data_entrada } = req.body;
@@ -32,11 +33,14 @@ router.post("/", (req, res) => {
                     console.error("Erro ao cadastrar entrada de produto:", error.message);
                     return res.status(500).json({ mensagem: "Erro ao cadastrar entrada de produto. " + error.message });
                 }
+                atualizarestoque(id_produto,qtde,valor_unitario)
                 res.status(201).json({ mensagem: "Entrada de produto cadastrada com sucesso!" });
             }
         );
     });
-});
+
+
+
 
 // Rota para listar todas as entradas de produto
 router.get("/", (req, res, next) => {
@@ -53,6 +57,45 @@ router.get("/", (req, res, next) => {
         });
     });
 });
+
+function atualizarestoque(id_produto, qtde, valor_unitario) {
+    db.all('SELECT * FROM estoque WHERE id_produto=?', [id_produto], (error, rows) => {
+        if (error) {
+            console.error("Erro ao consultar estoque:", error.message);
+            return; // Saia da função se houver um erro
+        }
+
+        if (rows.length > 0) {
+            console.log("tem dados, alterar os dados");
+            // Se houver uma entrada de produto para o mesmo id_produto, atualize os dados
+            db.run(
+                "UPDATE entrada_produto SET qtde=?, valor_unitario=? WHERE id_produto=?",
+                [qtde, valor_unitario, id_produto],
+                function (error) {
+                    if (error) {
+                        console.error("Erro ao atualizar entrada de produto:", error.message);
+                        return; // Saia da função se houver um erro
+                    }
+                    console.log("Entrada de produto atualizada com sucesso!");
+                }
+            );
+        } else {
+            console.log("não tem dados, inserir os dados");
+            // Se não houver uma entrada de produto para o mesmo id_produto, insira uma nova entrada
+            db.run(
+                "INSERT INTO entrada_produto (id_produto, qtde, valor_unitario, data_entrada) VALUES (?, ?, ?, CURRENT_DATE)",
+                [id_produto, qtde, valor_unitario],
+                function (error) {
+                    if (error) {
+                        console.error("Erro ao cadastrar entrada de produto:", error.message);
+                        return; // Saia da função se houver um erro
+                    }
+                    console.log("Entrada de produto cadastrada com sucesso!");
+                }
+            );
+        }
+    });
+}
 
 // Rota para excluir uma entrada de produto pelo ID
 router.delete("/:id", (req, res, next) => {
