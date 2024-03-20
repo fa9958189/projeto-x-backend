@@ -1,9 +1,7 @@
-// Importe as dependências necessárias
 const express = require("express");
 const router = express.Router();
 const sqlite3 = require("sqlite3").verbose();
 
-// Crie uma instância do banco de dados
 const db = new sqlite3.Database("database.db");
 
 // Criar a tabela de saída de produto, caso ela ainda não exista
