@@ -20,18 +20,29 @@ router.post("/", (req, res) => {
         return res.status(400).json({ mensagem: "Todos os campos são obrigatórios." });
     }
 
-    // Insira os dados da saída de produto no banco de dados
-    db.run(
-        "INSERT INTO saida_produto (id_produto, qtde, valor_unitario, data_saida) VALUES (?, ?, ?, ?)",
-        [id_produto, qtde, valor_unitario, data_saida],
-        function (error) {
-            if (error) {
-                console.error("Erro ao cadastrar saída de produto:", error.message);
-                return res.status(500).json({ mensagem: "Erro ao cadastrar saída de produto. " + error.message });
-            }
-            res.status(201).json({ mensagem: "Saída de produto cadastrada com sucesso!" });
+    // Verifica se o produto já existe no banco de dados de entrada
+    db.get("SELECT * FROM entrada_produto WHERE id_produto = ?", id_produto, (error, row) => {
+        if (error) {
+            return res.status(500).json({ mensagem: "Erro ao verificar entrada de produto." });
         }
-    );
+        
+        if (!row) {
+            return res.status(400).json({ mensagem: "Produto não possui entrada. Não é possível cadastrar uma saída." });
+        }
+
+        // Insira os dados da saída de produto no banco de dados
+        db.run(
+            "INSERT INTO saida_produto (id_produto, qtde, valor_unitario, data_saida) VALUES (?, ?, ?, ?)",
+            [id_produto, qtde, valor_unitario, data_saida],
+            function (error) {
+                if (error) {
+                    console.error("Erro ao cadastrar saída de produto:", error.message);
+                    return res.status(500).json({ mensagem: "Erro ao cadastrar saída de produto. " + error.message });
+                }
+                res.status(201).json({ mensagem: "Saída de produto cadastrada com sucesso!" });
+            }
+        );
+    });
 });
 
 // Rota para listar todas as saídas de produto
@@ -42,12 +53,21 @@ router.get("/", (req, res, next) => {
                 error: error.message
             });
         }
+        
+        // Remova as entradas de produtos excluídas da listagem de saídas
+        rows.forEach((saida, index) => {
+            if (!saida.id_produto) {
+                rows.splice(index, 1);
+            }
+        });
+
         res.status(200).send({
             mensagem: "Aqui estão todas as saídas de produto cadastradas",
             saidas: rows
         });
     });
 });
+
 
 // Rota para excluir uma saída de produto pelo ID
 router.delete("/:id", (req, res, next) => {
@@ -63,7 +83,17 @@ router.delete("/:id", (req, res, next) => {
                 error: error.message
             });
         }
-        res.status(200).send({ mensagem: "Saída de produto excluída com sucesso!" });
+
+        // Após excluir a saída de produto, remova-a da listagem de entradas também
+        db.run("DELETE FROM entrada_produto WHERE id_produto=?", id, (error) => {
+            if (error) {
+                return res.status(500).send({
+                    error: error.message
+                });
+            }
+
+            res.status(200).send({ mensagem: "Saída de produto excluída com sucesso!" });
+        });
     });
 });
 

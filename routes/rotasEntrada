@@ -45,12 +45,21 @@ router.get("/", (req, res, next) => {
                 error: error.message
             });
         }
+        
+        // Remova as saídas de produtos excluídas da listagem de entradas
+        rows.forEach((entrada, index) => {
+            if (!entrada.id_produto) {
+                rows.splice(index, 1);
+            }
+        });
+
         res.status(200).send({
             mensagem: "Aqui estão todas as entradas de produto cadastradas",
             entradas: rows
         });
     });
 });
+
 
 // Rota para excluir uma entrada de produto pelo ID
 router.delete("/:id", (req, res, next) => {
@@ -66,9 +75,20 @@ router.delete("/:id", (req, res, next) => {
                 error: error.message
             });
         }
-        res.status(200).send({ mensagem: "Entrada de produto excluída com sucesso!" });
+
+        // Após excluir a entrada de produto, remova-a da listagem de saídas também
+        db.run("DELETE FROM saida_produto WHERE id_produto=?", id, (error) => {
+            if (error) {
+                return res.status(500).send({
+                    error: error.message
+                });
+            }
+
+            res.status(200).send({ mensagem: "Entrada de produto excluída com sucesso!" });
+        });
     });
 });
+
 
 function atualizarEstoque(id_produto, qtde, valor_unitario) {
     db.all('SELECT * FROM estoque WHERE id_produto=?', [id_produto], (error, rows) => {
