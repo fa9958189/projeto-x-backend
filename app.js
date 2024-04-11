@@ -1,14 +1,15 @@
 const express = require('express');
+const morgan = require('morgan');
+const cors = require('cors');
 const app = express();
-const cors = require("cors");
-const morgan = require("morgan");
-const bodyParser = require('body-parser');
-
-// Middlewares
-app.use(express.json());
 app.use(cors());
-app.use(morgan("dev"));
-app.use(bodyParser.urlencoded({ extended: false }));
+const bodyParser = require('body-parser');
+app.use(morgan('dev'));
+app.use(bodyParser.urlencoded({extended:false}));
+app.use(bodyParser.json());
+app.use('/uploads', express.static('./uploads'));
+app.use('/assets', express.static('./assets'));
+
 
 // Rotas
 const rotaUsuario = require("./routes/rotasUsuario");

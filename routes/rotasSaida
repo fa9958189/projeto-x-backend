@@ -1,15 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const sqlite3 = require("sqlite3").verbose();
-
-const db = new sqlite3.Database("database.db");
-
-// Criar a tabela de saída de produto, caso ela ainda não exista
-db.run("CREATE TABLE IF NOT EXISTS saida_produto (id INTEGER PRIMARY KEY AUTOINCREMENT, id_produto INTEGER, qtde INTEGER, valor_unitario REAL, data_saida DATE)", (createTableError) => {
-    if (createTableError) {
-        console.error("Erro ao criar tabela de saída de produto:", createTableError.message);
-    }
-});
+const mysql = require("../mysql").pool;
 
 // Rota para cadastrar uma saída de produto
 router.post("/", (req, res) => {
@@ -20,80 +11,51 @@ router.post("/", (req, res) => {
         return res.status(400).json({ mensagem: "Todos os campos são obrigatórios." });
     }
 
-    // Verifica se o produto já existe no banco de dados de entrada
-    db.get("SELECT * FROM entrada_produto WHERE id_produto = ?", id_produto, (error, row) => {
-        if (error) {
-            return res.status(500).json({ mensagem: "Erro ao verificar entrada de produto." });
-        }
-        
-        if (!row) {
-            return res.status(400).json({ mensagem: "Produto não possui entrada. Não é possível cadastrar uma saída." });
-        }
-
-        // Insira os dados da saída de produto no banco de dados
-        db.run(
-            "INSERT INTO saida_produto (id_produto, qtde, valor_unitario, data_saida) VALUES (?, ?, ?, ?)",
-            [id_produto, qtde, valor_unitario, data_saida],
-            function (error) {
-                if (error) {
-                    console.error("Erro ao cadastrar saída de produto:", error.message);
-                    return res.status(500).json({ mensagem: "Erro ao cadastrar saída de produto. " + error.message });
-                }
-                res.status(201).json({ mensagem: "Saída de produto cadastrada com sucesso!" });
+    // Insira os dados da saída de produto no banco de dados
+    mysql.query(
+        "INSERT INTO saida_produto (id_produto, qtde, valor_unitario, data_saida) VALUES (?, ?, ?, ?)",
+        [id_produto, qtde, valor_unitario, data_saida],
+        (error, results, fields) => {
+            if (error) {
+                console.error("Erro ao cadastrar saída de produto:", error.message);
+                return res.status(500).json({ mensagem: "Erro ao cadastrar saída de produto. " + error.message });
             }
-        );
-    });
+            res.status(201).json({ mensagem: "Saída de produto cadastrada com sucesso!" });
+        }
+    );
 });
 
 // Rota para listar todas as saídas de produto
-router.get("/", (req, res, next) => {
-    db.all("SELECT * FROM saida_produto INNER JOIN produto ON saida_produto.id_produto = produto.id", (error, rows) => {
+router.get("/", (req, res) => {
+    mysql.query("SELECT * FROM saida_produto INNER JOIN produto ON saida_produto.id_produto = produto.id", (error, results, fields) => {
         if (error) {
-            return res.status(500).send({
-                error: error.message
-            });
+            return res.status(500).json({ error: error.message });
         }
-        
-        // Remova as entradas de produtos excluídas da listagem de saídas
-        rows.forEach((saida, index) => {
-            if (!saida.id_produto) {
-                rows.splice(index, 1);
-            }
-        });
 
-        res.status(200).send({
+        // Remova as entradas de produtos excluídas da listagem de saídas
+        const saidas = results.filter(saida => saida.id_produto !== null);
+
+        res.status(200).json({
             mensagem: "Aqui estão todas as saídas de produto cadastradas",
-            saidas: rows
+            saidas: saidas
         });
     });
 });
 
-
 // Rota para excluir uma saída de produto pelo ID
-router.delete("/:id", (req, res, next) => {
+router.delete("/:id", (req, res) => {
     const { id } = req.params;
 
     if (!id) {
-        return res.status(400).send({ error: "Parâmetros inválidos" });
+        return res.status(400).json({ error: "Parâmetros inválidos" });
     }
 
-    db.run("DELETE FROM saida_produto WHERE id=?", id, (error) => {
+    mysql.query("DELETE FROM saida_produto WHERE id=?", [id], (error, results, fields) => {
         if (error) {
-            return res.status(500).send({
-                error: error.message
-            });
+            return res.status(500).json({ error: error.message });
         }
 
-        // Após excluir a saída de produto, remova-a da listagem de entradas também
-        db.run("DELETE FROM entrada_produto WHERE id_produto=?", id, (error) => {
-            if (error) {
-                return res.status(500).send({
-                    error: error.message
-                });
-            }
-
-            res.status(200).send({ mensagem: "Saída de produto excluída com sucesso!" });
-        });
+        res.status(200).json({ mensagem: "Saída de produto excluída com sucesso!" });
     });
 });
 

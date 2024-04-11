@@ -1,114 +1,91 @@
 // Importe as dependências necessárias
 const express = require("express");
 const router = express.Router();
-const sqlite3 = require("sqlite3").verbose();
-
-
-// Crie uma instância do banco de dados
-const db = new sqlite3.Database("database.db");
+const mysql = require("../mysql").pool;
 
 // Rota para cadastrar um produto
 router.post("/", (req, res) => {
     const { status, descricao, estoque_minimo, estoque_maximo } = req.body;
-    //criar a tabela produto, caso ela ainda nao 
-                db.run("CREATE TABLE IF NOT EXISTS produto (id INTEGER PRIMARY KEY AUTOINCREMENT, status TEXT, descricao TEXT, estoque_minimo REAL, estoque_maximo REAL)", (createTableError) => {
-                    console.log(createTableError)
-                    if (createTableError) {
-                        return res.status(500).send({
-                            error: createTableError.message
-                        });
-                    }
 
-
-                });
-           
     // Verifica se todos os campos obrigatórios estão presentes
     if (!status || !descricao || !estoque_minimo || !estoque_maximo) {
         return res.status(400).json({ mensagem: "Todos os campos são obrigatórios." });
     }
+
     // Insira os dados do produto no banco de dados
-    db.run(
+    mysql.query(
         "INSERT INTO produto (status, descricao, estoque_minimo, estoque_maximo) VALUES (?, ?, ?, ?)",
         [status, descricao, estoque_minimo, estoque_maximo],
-        function (error) {
-     
+        (error, results, fields) => {
             if (error) {
                 console.error("Erro ao cadastrar produto:", error.message);
-                
-                return res.status(500).json({ mensagem: "Erro ao cadastrar produto. "+error.message });
+                return res.status(500).json({ mensagem: "Erro ao cadastrar produto. " + error.message });
             }
             res.status(201).json({ mensagem: "Produto cadastrado com sucesso!" });
         }
     );
 });
 
-
-// Rota para listar todos os usuários
-router.get("/", (req, res, next) => {
-    db.all("SELECT * FROM produto", (error, rows) => {
+// Rota para listar todos os produtos
+router.get("/", (req, res) => {
+    mysql.query("SELECT * FROM produto", (error, results, fields) => {
         if (error) {
-            return res.status(500).send({
-                error: error.message
-            });
+            return res.status(500).json({ error: error.message });
         }
-        res.status(200).send({
+        res.status(200).json({
             mensagem: "Aqui estão todos os cadastros",
-            produtos: rows
+            produtos: results
         });
     });
 });
 
-// Rota para obter um usuário pelo ID
-router.get("/:id", (req, res, next) => {
+// Rota para obter um produto pelo ID
+router.get("/:id", (req, res) => {
     const { id } = req.params;
-    db.get("SELECT * FROM produto WHERE id=?", [id], (error, rows) => {
+    mysql.query("SELECT * FROM produto WHERE id=?", [id], (error, results, fields) => {
         if (error) {
-            return res.status(500).send({
-                error: error.message
-            });
+            return res.status(500).json({ error: error.message });
         }
-
-        res.status(200).send({
+        res.status(200).json({
             mensagem: "Aqui está o produto solicitado",
-            produtos: rows
+            produto: results[0]
         });
     });
 });
 
-
-// Rota para atualizar um usuário existente
-router.put("/", (req, res, next) => {
-    const { id, status, descricao, estoque_minimo, estoque_maximo, } = req.body;
+// Rota para atualizar um produto existente
+router.put("/", (req, res) => {
+    const { id, status, descricao, estoque_minimo, estoque_maximo } = req.body;
 
     if (!id || !status || !descricao || !estoque_minimo || !estoque_maximo) {
-        return res.status(400).send({ error: "Parâmetros inválidos" });
+        return res.status(400).json({ error: "Parâmetros inválidos" });
     }
 
-    db.run("UPDATE produto SET id=?, status=?, descricao=?, estoque_minimo=?, estoque_maximo=?, WHERE id=?", [id, status, descricao, estoque_minimo, estoque_maximo, id], (error) => {
-        if (error) {
-            return res.status(500).send({
-                error: error.message
-            });
+    mysql.query(
+        "UPDATE produto SET status=?, descricao=?, estoque_minimo=?, estoque_maximo=? WHERE id=?",
+        [status, descricao, estoque_minimo, estoque_maximo, id],
+        (error, results, fields) => {
+            if (error) {
+                return res.status(500).json({ error: error.message });
+            }
+            res.status(200).json({ mensagem: "Produto atualizado com sucesso!" });
         }
-        res.status(200).send({ mensagem: "Usuário atualizado com sucesso!" });
-    });
+    );
 });
 
-// Rota para excluir um usuário pelo ID
-router.delete("/:id", (req, res, next) => {
+// Rota para excluir um produto pelo ID
+router.delete("/:id", (req, res) => {
     const { id } = req.params;
 
     if (!id) {
-        return res.status(400).send({ error: "Parâmetros inválidos" });
+        return res.status(400).json({ error: "Parâmetros inválidos" });
     }
 
-    db.run("DELETE FROM produto WHERE id=?", id, (error) => {
+    mysql.query("DELETE FROM produto WHERE id=?", [id], (error, results, fields) => {
         if (error) {
-            return res.status(500).send({
-                error: error.message
-            });
+            return res.status(500).json({ error: error.message });
         }
-        res.status(200).send({ mensagem: "Produto excluído com sucesso!" });
+        res.status(200).json({ mensagem: "Produto excluído com sucesso!" });
     });
 });
 

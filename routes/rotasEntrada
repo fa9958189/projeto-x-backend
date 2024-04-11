@@ -1,17 +1,8 @@
-// Importe as dependências necessárias
+// routes/entrada.js
+
 const express = require("express");
 const router = express.Router();
-const sqlite3 = require("sqlite3").verbose();
-
-// Crie uma instância do banco de dados
-const db = new sqlite3.Database("database.db");
-
-// Criar a tabela de entrada de produto, caso ela ainda não exista
-db.run("CREATE TABLE IF NOT EXISTS entrada_produto (id INTEGER PRIMARY KEY AUTOINCREMENT, id_produto INTEGER, qtde INTEGER, valor_unitario REAL, data_entrada DATE)", (createTableError) => {
-    if (createTableError) {
-        console.error("Erro ao criar tabela de entrada de produto:", createTableError.message);
-    }
-});
+const mysql = require("../mysql").pool;
 
 // Rota para cadastrar uma entrada de produto
 router.post("/", (req, res) => {
@@ -22,111 +13,93 @@ router.post("/", (req, res) => {
         return res.status(400).json({ mensagem: "Todos os campos são obrigatórios." });
     }
 
-    // Insira os dados da entrada de produto no banco de dados
-    db.run(
-        "INSERT INTO entrada_produto (id_produto, qtde, valor_unitario, data_entrada) VALUES (?, ?, ?, ?)",
-        [id_produto, qtde, valor_unitario, data_entrada],
-        function (error) {
-            if (error) {
-                console.error("Erro ao cadastrar entrada de produto:", error.message);
-                return res.status(500).json({ mensagem: "Erro ao cadastrar entrada de produto. " + error.message });
-            }
-            atualizarEstoque(id_produto, qtde, valor_unitario);
-            res.status(201).json({ mensagem: "Entrada de produto cadastrada com sucesso!" });
+    // Insira os dados da entrada de produto no banco de dados MySQL
+    mysql.getConnection((error, connection) => {
+        if (error) {
+            console.error("Erro ao obter conexão com o banco de dados:", error);
+            return res.status(500).json({ mensagem: "Erro ao conectar ao banco de dados." });
         }
-    );
+
+        connection.query(
+            "INSERT INTO `entrada_produto`(`id_produto`, `qtde`, `valor_unitario`, `data_entrada`) VALUES (?,?,?,?)",
+            [id_produto, qtde, valor_unitario, data_entrada],
+            (queryError, results) => {
+                connection.release(); // Libera a conexão para o pool
+
+                if (queryError) {
+                    console.error("Erro ao cadastrar entrada de produto:", queryError);
+                    return res.status(500).json({ mensagem: "Erro ao cadastrar entrada de produto." });
+                }
+               
+
+                res.status(201).json({ mensagem: "Entrada de produto cadastrada com sucesso!" });
+            }
+        );
+    });
 });
 
 // Rota para listar todas as entradas de produto
 router.get("/", (req, res, next) => {
-    db.all("SELECT * FROM entrada_produto INNER JOIN produto ON entrada_produto.id_produto = produto.id", (error, rows) => {
+    mysql.getConnection((error, connection) => {
         if (error) {
-            return res.status(500).send({
-                error: error.message
-            });
+            console.error("Erro ao obter conexão com o banco de dados:", error);
+            return res.status(500).json({ mensagem: "Erro ao conectar ao banco de dados." });
         }
-        
-        // Remova as saídas de produtos excluídas da listagem de entradas
-        rows.forEach((entrada, index) => {
-            if (!entrada.id_produto) {
-                rows.splice(index, 1);
-            }
-        });
 
-        res.status(200).send({
-            mensagem: "Aqui estão todas as entradas de produto cadastradas",
-            entradas: rows
+        connection.query("SELECT * FROM entrada_produto INNER JOIN produto ON entrada_produto.id_produto = produto.id", (queryError, rows) => {
+            connection.release(); // Libera a conexão para o pool
+
+            if (queryError) {
+                console.error("Erro ao executar consulta:", queryError);
+                return res.status(500).json({ mensagem: "Erro ao listar entradas de produto." });
+            }
+
+            // Remova as saídas de produtos excluídas da listagem de entradas
+            rows = rows.filter(entrada => entrada.id_produto);
+
+            res.status(200).json({
+                mensagem: "Aqui estão todas as entradas de produto cadastradas",
+                entradas: rows
+            });
         });
     });
 });
-
 
 // Rota para excluir uma entrada de produto pelo ID
 router.delete("/:id", (req, res, next) => {
     const { id } = req.params;
 
     if (!id) {
-        return res.status(400).send({ error: "Parâmetros inválidos" });
+        return res.status(400).json({ error: "Parâmetros inválidos" });
     }
 
-    db.run("DELETE FROM entrada_produto WHERE id=?", id, (error) => {
+    // Exclui a entrada de produto pelo ID no banco de dados MySQL
+    mysql.getConnection((error, connection) => {
         if (error) {
-            return res.status(500).send({
-                error: error.message
-            });
+            console.error("Erro ao obter conexão com o banco de dados:", error);
+            return res.status(500).json({ mensagem: "Erro ao conectar ao banco de dados." });
         }
 
-        // Após excluir a entrada de produto, remova-a da listagem de saídas também
-        db.run("DELETE FROM saida_produto WHERE id_produto=?", id, (error) => {
-            if (error) {
-                return res.status(500).send({
-                    error: error.message
-                });
+        connection.query("DELETE FROM entrada_produto WHERE id=?", [id], (queryError, results) => {
+            if (queryError) {
+                connection.release(); // Libera a conexão para o pool
+                console.error("Erro ao excluir entrada de produto:", queryError);
+                return res.status(500).json({ mensagem: "Erro ao excluir entrada de produto." });
             }
 
-            res.status(200).send({ mensagem: "Entrada de produto excluída com sucesso!" });
+            // Após excluir a entrada de produto, remova-a da listagem de saídas também
+            connection.query("DELETE FROM saida_produto WHERE id_produto=?", [id], (deleteError, results) => {
+                connection.release(); // Libera a conexão para o pool
+
+                if (deleteError) {
+                    console.error("Erro ao excluir saída de produto associada:", deleteError);
+                    return res.status(500).json({ mensagem: "Erro ao excluir saída de produto associada." });
+                }
+
+                res.status(200).json({ mensagem: "Entrada de produto excluída com sucesso!" });
+            });
         });
     });
 });
-
-
-function atualizarEstoque(id_produto, qtde, valor_unitario) {
-    db.all('SELECT * FROM estoque WHERE id_produto=?', [id_produto], (error, rows) => {
-        if (error) {
-            console.error("Erro ao consultar estoque:", error.message);
-            return; // Saia da função se houver um erro
-        }
-
-        if (rows.length > 0) {
-            console.log("tem dados, alterar os dados");
-            // Se houver uma entrada de produto para o mesmo id_produto, atualize os dados
-            db.run(
-                "UPDATE entrada_produto SET qtde=?, valor_unitario=? WHERE id_produto=?",
-                [qtde, valor_unitario, id_produto],
-                function (error) {
-                    if (error) {
-                        console.error("Erro ao atualizar entrada de produto:", error.message);
-                        return; // Saia da função se houver um erro
-                    }
-                    console.log("Entrada de produto atualizada com sucesso!");
-                }
-            );
-        } else {
-            console.log("não tem dados, inserir os dados");
-            // Se não houver uma entrada de produto para o mesmo id_produto, insira uma nova entrada
-            db.run(
-                "INSERT INTO entrada_produto (id_produto, qtde, valor_unitario, data_entrada) VALUES (?, ?, ?, CURRENT_DATE)",
-                [id_produto, qtde, valor_unitario],
-                function (error) {
-                    if (error) {
-                        console.error("Erro ao cadastrar entrada de produto:", error.message);
-                        return; // Saia da função se houver um erro
-                    }
-                    console.log("Entrada de produto cadastrada com sucesso!");
-                }
-            );
-        }
-    });
-}
 
 module.exports = router;
