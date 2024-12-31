@@ -1,105 +1,103 @@
 const express = require("express");
 const router = express.Router();
-const mysql = require("../mysql").pool; // Importa o pool de conexões MySQL
+const sqlite3 = require("sqlite3").verbose();
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 
-router.post("/login", (req, res, next) => {
+// Conexão com o banco de dados SQLite
+const db = new sqlite3.Database("./database.db", (err) => {
+    if (err) {
+        console.error("Erro ao conectar ao banco de dados:", err.message);
+    } else {
+        console.log("Conexão com o banco de dados SQLite estabelecida.");
+    }
+});
+
+// Endpoint de login
+router.post("/login", (req, res) => {
     const { email, senha } = req.body;
 
-    mysql.query("SELECT * FROM usuario WHERE email = ?", [email], (error, results, fields) => {
-        if (error) {
-            console.error("Erro ao buscar usuário:", error.message);
-            return res.status(500).send({
-                error: error.message
-            });
+    if (!email || !senha) {
+        return res.status(400).send({ mensagem: "Email e senha são obrigatórios." });
+    }
+
+    db.get("SELECT * FROM usuario WHERE email = ?", [email], (err, usuario) => {
+        if (err) {
+            console.error("Erro ao buscar usuário no banco de dados:", err.message);
+            return res.status(500).send({ error: "Erro interno do servidor." });
         }
 
-        if (results.length === 0) {
-            console.log("Usuário não encontrado");
-            return res.status(401).send({
-                mensagem: "Usuário não encontrado."
-            });
+        if (!usuario) {
+            console.log("Usuário não encontrado.");
+            return res.status(401).send({ mensagem: "Usuário ou senha inválidos." });
         }
 
-        const usuario = results[0];
-
-        bcrypt.compare(senha, usuario.senha, (bcryptError, result) => {
-            if (bcryptError) {
-                console.error("Erro ao comparar senhas:", bcryptError.message);
-                return res.status(500).send({
-                    error: bcryptError.message
-                });
+        bcrypt.compare(senha, usuario.senha, (bcryptErr, result) => {
+            if (bcryptErr) {
+                console.error("Erro ao comparar senhas:", bcryptErr.message);
+                return res.status(500).send({ error: "Erro interno do servidor." });
             }
 
             if (!result) {
-                console.log("Senha incorreta");
-                return res.status(401).send({
-                    mensagem: "Senha incorreta."
-                });
+                console.log("Senha incorreta.");
+                return res.status(401).send({ mensagem: "Usuário ou senha inválidos." });
             }
 
-            console.log("Login bem sucedido");
-
-            const token = jwt.sign({ id: usuario.id, email: usuario.email }, 'secreto', { expiresIn: '1h' });
+            console.log("Login bem-sucedido.");
+            const token = jwt.sign(
+                { id: usuario.id, email: usuario.email },
+                'secreto',
+                { expiresIn: '1h' }
+            );
 
             res.status(200).send({
-                mensagem: "Login bem sucedido.",
+                mensagem: "Login bem-sucedido.",
                 token: token
             });
         });
     });
 });
 
-router.get("/:id", (req, res, next) => {
+// Endpoint para obter um usuário por ID
+router.get("/:id", (req, res) => {
     const { id } = req.params;
 
-    mysql.query("SELECT * FROM usuario WHERE id=?", [id], (error, results, fields) => {
-        if (error) {
-            return res.status(500).send({
-                error: error.message
-            });
+    db.get("SELECT * FROM usuario WHERE id = ?", [id], (err, usuario) => {
+        if (err) {
+            console.error("Erro ao buscar usuário por ID:", err.message);
+            return res.status(500).send({ error: "Erro interno do servidor." });
         }
 
-        if (results.length === 0) {
-            return res.status(404).send({
-                mensagem: "Usuário não encontrado."
-            });
+        if (!usuario) {
+            return res.status(404).send({ mensagem: "Usuário não encontrado." });
         }
 
         res.status(200).send({
-            mensagem: "Aqui está o usuário solicitado",
-            usuario: results[0]
-        });
-    });
-});
-router.get("/", (req, res, next) => {
-    const { id } = req.params;
-
-    mysql.query("SELECT * FROM usuario ", (error, results, fields) => {
-        if (error) {
-            return res.status(500).send({
-                error: error.message
-            });
-        }
-
-        if (results.length === 0) {
-            return res.status(404).send({
-                mensagem: "Usuário não encontrado."
-            });
-        }
-
-        res.status(200).send({
-            mensagem: "Aqui está o usuário solicitado",
-            usuario: results
+            mensagem: "Usuário encontrado.",
+            usuario: usuario
         });
     });
 });
 
-router.post('/', (req, res, next) => {
+// Endpoint para listar todos os usuários
+router.get("/", (req, res) => {
+    db.all("SELECT * FROM usuario", (err, usuarios) => {
+        if (err) {
+            console.error("Erro ao buscar usuários:", err.message);
+            return res.status(500).send({ error: "Erro interno do servidor." });
+        }
+
+        res.status(200).send({
+            mensagem: "Usuários encontrados.",
+            usuarios: usuarios
+        });
+    });
+});
+
+// Endpoint para criar um novo usuário
+router.post("/", (req, res) => {
     const { nome, email, senha } = req.body;
 
-    // Validação dos campos
     let msg = [];
     if (!nome || nome.length < 3) {
         msg.push({ mensagem: "Nome inválido! Deve ter pelo menos 3 caracteres." });
@@ -111,53 +109,40 @@ router.post('/', (req, res, next) => {
         msg.push({ mensagem: "Senha inválida! Deve ter pelo menos 6 caracteres." });
     }
     if (msg.length > 0) {
-        return res.status(400).send({
-            mensagem: "Falha ao cadastrar usuário.",
-            erros: msg
-        });
+        return res.status(400).send({ mensagem: "Falha ao cadastrar usuário.", erros: msg });
     }
 
-    // Verifica se o email já está cadastrado
-    mysql.query('SELECT * FROM usuario WHERE email = ?', [email], (error, results, fields) => {
-        if (error) {
-            return res.status(500).send({
-                error: error.message,
-                response: null
-            });
+    db.get("SELECT * FROM usuario WHERE email = ?", [email], (err, usuario) => {
+        if (err) {
+            console.error("Erro ao verificar e-mail:", err.message);
+            return res.status(500).send({ error: "Erro interno do servidor." });
         }
 
-        if (results.length > 0) {
-            return res.status(400).send({
-                mensagem: "E-mail já cadastrado."
-            });
+        if (usuario) {
+            return res.status(400).send({ mensagem: "E-mail já cadastrado." });
         }
 
-        // Hash da senha antes de salvar no banco de dados
-        bcrypt.hash(senha, 10, (hashError, hashedPassword) => {
-            if (hashError) {
-                return res.status(500).send({
-                    error: hashError.message,
-                    response: null
-                });
+        bcrypt.hash(senha, 10, (hashErr, hashedPassword) => {
+            if (hashErr) {
+                console.error("Erro ao hashear senha:", hashErr.message);
+                return res.status(500).send({ error: "Erro interno do servidor." });
             }
 
-            // Insere o novo usuário no banco de dados
-            mysql.query('INSERT INTO usuario (nome, email, senha) VALUES (?, ?, ?)', [nome, email, hashedPassword], (insertError, results, fields) => {
-                if (insertError) {
-                    return res.status(500).send({
-                        error: insertError.message,
-                        response: null
+            db.run(
+                "INSERT INTO usuario (nome, email, senha) VALUES (?, ?, ?)",
+                [nome, email, hashedPassword],
+                function (insertErr) {
+                    if (insertErr) {
+                        console.error("Erro ao inserir usuário:", insertErr.message);
+                        return res.status(500).send({ error: "Erro interno do servidor." });
+                    }
+
+                    res.status(201).send({
+                        mensagem: "Usuário cadastrado com sucesso.",
+                        usuario: { id: this.lastID, nome: nome, email: email }
                     });
                 }
-                res.status(201).send({
-                    mensagem: "Cadastro criado com sucesso!",
-                    usuario: {
-                        id: results.insertId,
-                        nome: nome,
-                        email: email
-                    }
-                });
-            });
+            );
         });
     });
 });
@@ -168,71 +153,55 @@ function validateEmail(email) {
     return re.test(String(email).toLowerCase());
 }
 
-router.put("/", (req, res, next) => {
+// Endpoint para atualizar um usuário
+router.put("/", (req, res) => {
     const { id, nome, email, senha } = req.body;
 
     if (!id || !nome || !email || !senha) {
-        return res.status(400).send({ error: "Parâmetros inválidos" });
+        return res.status(400).send({ error: "Parâmetros inválidos." });
     }
 
-    // Verifica se o usuário existe antes de atualizá-lo
-    mysql.query('SELECT * FROM usuario WHERE id = ?', [id], (error, results, fields) => {
-        if (error) {
-            return res.status(500).send({
-                error: error.message
-            });
+    bcrypt.hash(senha, 10, (hashErr, hashedPassword) => {
+        if (hashErr) {
+            console.error("Erro ao hashear senha:", hashErr.message);
+            return res.status(500).send({ error: "Erro interno do servidor." });
         }
 
-        if (results.length === 0) {
-            return res.status(404).send({
-                mensagem: "Usuário não encontrado."
-            });
-        }
+        db.run(
+            "UPDATE usuario SET nome = ?, email = ?, senha = ? WHERE id = ?",
+            [nome, email, hashedPassword, id],
+            function (updateErr) {
+                if (updateErr) {
+                    console.error("Erro ao atualizar usuário:", updateErr.message);
+                    return res.status(500).send({ error: "Erro interno do servidor." });
+                }
 
-        // Atualiza o usuário no banco de dados
-        mysql.query("UPDATE usuario SET nome=?, email=?, senha=? WHERE id=?", [nome, email, senha, id], (updateError, results, fields) => {
-            if (updateError) {
-                return res.status(500).send({
-                    error: updateError.message
-                });
+                res.status(200).send({ mensagem: "Usuário atualizado com sucesso." });
             }
-            res.status(200).send({ mensagem: "Usuário atualizado com sucesso!" });
-        });
+        );
     });
 });
 
-router.delete("/:id", (req, res, next) => {
+// Endpoint para deletar um usuário
+router.delete("/:id", (req, res) => {
     const { id } = req.params;
 
     if (!id) {
-        return res.status(400).send({ error: "Parâmetros inválidos" });
+        return res.status(400).send({ error: "Parâmetros inválidos." });
     }
 
-    // Verifica se o usuário existe antes de excluí-lo
-    mysql.query('SELECT * FROM usuario WHERE id = ?', [id], (error, results, fields) => {
-        if (error) {
-            return res.status(500).send({
-                error: error.message
-            });
+    db.run("DELETE FROM usuario WHERE id = ?", [id], function (err) {
+        if (err) {
+            console.error("Erro ao excluir usuário:", err.message);
+            return res.status(500).send({ error: "Erro interno do servidor." });
         }
 
-        if (results.length === 0) {
-            return res.status(404).send({
-                mensagem: "Usuário não encontrado."
-            });
+        if (this.changes === 0) {
+            return res.status(404).send({ mensagem: "Usuário não encontrado." });
         }
 
-        // Exclui o usuário do banco de dados
-        mysql.query("DELETE FROM usuario WHERE id=?", [id], (deleteError, results, fields) => {
-            if (deleteError) {
-                return res.status(500).send({
-                    error: deleteError.message
-                });
-            }
-            res.status(200).send({ mensagem: "Usuário excluído com sucesso!" });
-        });
+        res.status(200).send({ mensagem: "Usuário excluído com sucesso." });
     });
 });
-
 
 module.exports = router;
