@@ -13,11 +13,6 @@ app.use('/assets', express.static('./assets'));
 
 // Rotas
 const rotaUsuario = require("./routes/rotasUsuario");
-const rotaProduto = require("./routes/rotasProduto");
-const rotaEntrada= require("./routes/rotasEntrada"); 
-const rotaSaida= require("./routes/rotasSaida"); 
-const rotaEstoque = require("./routes/rotasEstoque"); 
-
 
 // Configuração de headers para CORS
 app.use((req, res, next) => {
